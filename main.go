@@ -64,36 +64,47 @@ type PlayerInput struct {
 	Up               bool
 	Down             bool
 	ToggleFullscreen bool
+	Movement         bool
 }
+
+var globalFrameCounter uint
 
 func main() {
 	var screenWidth int32 = 800
-	var screenHeight int32 = 450
+	var screenHeight int32 = 600
 	var spriteScale float32 = 3
+	var frameSpeed uint = 8
 
 	rl.SetConfigFlags(rl.FlagVsyncHint | rl.FlagBorderlessWindowedMode)
-	rl.InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window")
+	rl.InitWindow(screenWidth, screenHeight, "raylibtest")
 	defer rl.CloseWindow()
 
 	rl.SetTargetFPS(60)
 
-	playerAsset := NewGameAsset("Dude", "assets/Heroes/Knight/Idle/Idle-Sheet.png", 0, 0, false)
+	playerAsset := NewGameAsset("Dude", "assets/Heroes/Knight/Run/Run-Sheet.png", 0, 0, false)
+	//playerAsset := NewGameAsset("Dude", "assets/Heroes/Wizzard/Run/Run-Sheet.png", 0, 0, false)
 	grassAsset := NewGameAsset("Grass", "assets/Environment/Green Woods/Assets/Tiles.png", 0, 0, false)
 
 	for !rl.WindowShouldClose() {
 		// Input Stuff
-
-		//rl.PollInputEvents()
 		input := ProcessInput()
 		UpdatePlayerInput(&playerAsset, &input)
 
 		// Draw stuff
 		rl.BeginDrawing()
 
-		rl.ClearBackground(rl.RayWhite)
+		rl.ClearBackground(rl.DarkGreen)
 
-		DrawTile(&grassAsset, spriteScale)
-		DrawAsset(&playerAsset, spriteScale)
+		grassAsset.DrawTile(spriteScale)
+		playerAsset.DrawAnimation(spriteScale, 90, 64)
+
+		globalFrameCounter++
+		if globalFrameCounter >= 60/frameSpeed {
+			if input.Movement {
+				playerAsset.AdvancePlayerAnimationFrame()
+			}
+			globalFrameCounter = 0
+		}
 
 		rl.EndDrawing()
 	}
@@ -101,7 +112,7 @@ func main() {
 
 // Load sprite
 // Horizontally flip the texture by negating the width value
-func DrawAsset(asset *GameAsset, spriteScale float32) {
+func (asset *GameAsset) DrawAsset(spriteScale float32) {
 	var flipTexture float32 = -1.0
 	if asset.Look == LookRight {
 		flipTexture = 1.0
@@ -118,11 +129,31 @@ func DrawAsset(asset *GameAsset, spriteScale float32) {
 			Height: float32(asset.Texture.Height) * spriteScale,
 			Width:  float32(asset.Texture.Width) * spriteScale},
 		rl.Vector2{X: 0, Y: 0}, 0.0, rl.White)
+
+}
+
+func (asset *GameAsset) DrawAnimation(spriteScale float32, offset uint, spriteSize uint) {
+	var flipTexture float32 = -1.0
+	if asset.Look == LookRight {
+		flipTexture = 1.0
+	}
+
+	rl.DrawTexturePro(asset.Texture,
+		rl.Rectangle{X: float32(spriteSize * asset.AnimationFrame),
+			Y:      float32(offset),
+			Height: float32(spriteSize),
+			Width:  float32(spriteSize) * flipTexture},
+		rl.Rectangle{
+			X:      float32(asset.X),
+			Y:      float32(asset.Y),
+			Height: float32(spriteSize) * spriteScale,
+			Width:  float32(spriteSize) * spriteScale},
+		rl.Vector2{X: 0, Y: 0}, 0.0, rl.White)
 }
 
 // Load sprite
 // Horizontally flip the texture by negating the width value
-func DrawTile(asset *GameAsset, spriteScale float32) {
+func (asset *GameAsset) DrawTile(spriteScale float32) {
 	var flipTexture float32 = -1.0
 	if asset.Look == LookRight {
 		flipTexture = 1.0
@@ -153,8 +184,11 @@ func ProcessInput() PlayerInput {
 
 // Update Player location with input
 func UpdatePlayerInput(player *GameAsset, input *PlayerInput) {
+	input.Movement = false
+
 	if input.Right {
 		player.X = player.X + 1*int(player.MovementSpeed)
+		input.Movement = true
 		if player.Look == LookLeft {
 			player.Look = LookRight
 		}
@@ -162,6 +196,7 @@ func UpdatePlayerInput(player *GameAsset, input *PlayerInput) {
 
 	if input.Left {
 		player.X = player.X - 1*int(player.MovementSpeed)
+		input.Movement = true
 		if player.Look == LookRight {
 			player.Look = LookLeft
 		}
@@ -169,9 +204,18 @@ func UpdatePlayerInput(player *GameAsset, input *PlayerInput) {
 
 	if input.Up {
 		player.Y = player.Y - 1*int(player.MovementSpeed)
+		input.Movement = true
 	}
 
 	if input.Down {
 		player.Y = player.Y + 1*int(player.MovementSpeed)
+		input.Movement = true
+	}
+}
+
+func (asset *GameAsset) AdvancePlayerAnimationFrame() {
+	asset.AnimationFrame++
+	if asset.AnimationFrame > asset.AnimationFrameMax {
+		asset.AnimationFrame = 0
 	}
 }
