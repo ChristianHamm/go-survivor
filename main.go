@@ -52,10 +52,17 @@ func NewGameAsset(name string, assetFileName string, posX int, posY int, flip bo
 	}
 }
 
+type Tile GameAsset
+
+type GameMap struct {
+	Tiles [][]Tile
+}
+
 type World struct {
 	Player   GameAsset
 	Monsters []GameAsset
 	Input    PlayerInput
+	Map      GameMap
 }
 
 type PlayerInput struct {
@@ -67,69 +74,70 @@ type PlayerInput struct {
 	Movement         bool
 }
 
-var globalFrameCounter uint
+var globalFrameCounter int32
 
 func main() {
 	var screenWidth int32 = 800
 	var screenHeight int32 = 600
 	var spriteScale float32 = 3
-	var frameSpeed uint = 8
+	var frameSpeed int32 = 10
+	var targetFps int32 = 60
 
 	rl.SetConfigFlags(rl.FlagVsyncHint | rl.FlagBorderlessWindowedMode)
-	rl.InitWindow(screenWidth, screenHeight, "raylibtest")
+	rl.InitWindow(screenWidth, screenHeight, "gosurvivor")
 	defer rl.CloseWindow()
 
-	rl.SetTargetFPS(60)
-
+	rl.SetTargetFPS(targetFps)
 	playerAsset := NewGameAsset("Dude", "assets/Heroes/Knight/Run/Run-Sheet.png", 0, 0, false)
-	//playerAsset := NewGameAsset("Dude", "assets/Heroes/Wizzard/Run/Run-Sheet.png", 0, 0, false)
-	grassAsset := NewGameAsset("Grass", "assets/Environment/Green Woods/Assets/Tiles.png", 0, 0, false)
+
+	world := World{
+		Player:   playerAsset,
+		Monsters: nil,
+		Input: PlayerInput{
+			Right:            false,
+			Left:             false,
+			Up:               false,
+			Down:             false,
+			ToggleFullscreen: false,
+			Movement:         false,
+		},
+		Map: GameMap{},
+	}
+
+	// grassAsset := NewGameAsset("Grass", "assets/Environment/Green Woods/Assets/Tiles.png", 0, 0, false)
 
 	for !rl.WindowShouldClose() {
 		// Input Stuff
-		input := ProcessInput()
-		UpdatePlayerInput(&playerAsset, &input)
+		world.Input = ProcessInput()
+		UpdatePlayerInput(&world.Player, &world.Input)
+
+		// Check player bounds
+		// Update stats, attackState, nextAnimation
+
+		// Update Monsters
+		// for each monster in world.Monsters[]: update stats, position, attackState, nextAnimation
 
 		// Draw stuff
 		rl.BeginDrawing()
-
 		rl.ClearBackground(rl.DarkGreen)
 
-		grassAsset.DrawTile(spriteScale)
-		playerAsset.DrawAnimation(spriteScale, 90, 64)
+		// TODO: draw map here grassAsset.DrawTile(spriteScale)
+		//
+		// TODO: draw monsters
+		// for each monster in world.Monsters[]: DrawAnimation()
+		world.Player.DrawAnimation(spriteScale, 90, 64)
 
 		globalFrameCounter++
-		if globalFrameCounter >= 60/frameSpeed {
-			if input.Movement {
-				playerAsset.AdvancePlayerAnimationFrame()
+		if globalFrameCounter >= targetFps/frameSpeed {
+			if world.Input.Movement {
+				world.Player.AdvancePlayerAnimationFrame()
 			}
+			// TODO: advance monster animation frames
 			globalFrameCounter = 0
 		}
 
 		rl.EndDrawing()
 	}
-}
-
-// Load sprite
-// Horizontally flip the texture by negating the width value
-func (asset *GameAsset) DrawAsset(spriteScale float32) {
-	var flipTexture float32 = -1.0
-	if asset.Look == LookRight {
-		flipTexture = 1.0
-	}
-
-	rl.DrawTexturePro(asset.Texture,
-		rl.Rectangle{X: 0,
-			Y:      0,
-			Height: float32(asset.Texture.Height),
-			Width:  flipTexture * float32(asset.Texture.Width)},
-		rl.Rectangle{
-			X:      float32(asset.X),
-			Y:      float32(asset.Y),
-			Height: float32(asset.Texture.Height) * spriteScale,
-			Width:  float32(asset.Texture.Width) * spriteScale},
-		rl.Vector2{X: 0, Y: 0}, 0.0, rl.White)
-
 }
 
 func (asset *GameAsset) DrawAnimation(spriteScale float32, offset uint, spriteSize uint) {
@@ -139,19 +147,22 @@ func (asset *GameAsset) DrawAnimation(spriteScale float32, offset uint, spriteSi
 	}
 
 	rl.DrawTexturePro(asset.Texture,
-		rl.Rectangle{X: float32(spriteSize * asset.AnimationFrame),
+		rl.Rectangle{
+			X:      float32(spriteSize * asset.AnimationFrame),
 			Y:      float32(offset),
 			Height: float32(spriteSize),
-			Width:  float32(spriteSize) * flipTexture},
+			Width:  float32(spriteSize) * flipTexture,
+		},
 		rl.Rectangle{
 			X:      float32(asset.X),
 			Y:      float32(asset.Y),
 			Height: float32(spriteSize) * spriteScale,
-			Width:  float32(spriteSize) * spriteScale},
+			Width:  float32(spriteSize) * spriteScale,
+		},
 		rl.Vector2{X: 0, Y: 0}, 0.0, rl.White)
 }
 
-// Load sprite
+// DrawTile Loads a sprite
 // Horizontally flip the texture by negating the width value
 func (asset *GameAsset) DrawTile(spriteScale float32) {
 	var flipTexture float32 = -1.0
@@ -160,15 +171,18 @@ func (asset *GameAsset) DrawTile(spriteScale float32) {
 	}
 
 	rl.DrawTexturePro(asset.Texture,
-		rl.Rectangle{X: 0,
+		rl.Rectangle{
+			X:      0,
 			Y:      0,
 			Height: float32(asset.Texture.Height),
-			Width:  flipTexture * float32(asset.Texture.Width)},
+			Width:  flipTexture * float32(asset.Texture.Width),
+		},
 		rl.Rectangle{
 			X:      float32(asset.X),
 			Y:      float32(asset.Y),
 			Height: float32(asset.Texture.Height) * spriteScale,
-			Width:  float32(asset.Texture.Width) * spriteScale},
+			Width:  float32(asset.Texture.Width) * spriteScale,
+		},
 		rl.Vector2{X: 0, Y: 0}, 0.0, rl.White)
 }
 
@@ -182,7 +196,7 @@ func ProcessInput() PlayerInput {
 	}
 }
 
-// Update Player location with input
+// UpdatePlayerInput updates the location with input
 func UpdatePlayerInput(player *GameAsset, input *PlayerInput) {
 	input.Movement = false
 
